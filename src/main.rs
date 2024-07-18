@@ -66,21 +66,24 @@ struct WriteCommand {
     source: PathBuf
 }
 
-
-fn main() {
+fn open_device() -> LinuxI2CDevice {
     const DEVICE_PATH: &str = "/dev/i2c-3";
     const EEPROM_ADDRESS: u16 = 0x50;
 
-    let mut device = match LinuxI2CDevice::new(DEVICE_PATH, EEPROM_ADDRESS) {
+    match LinuxI2CDevice::new(DEVICE_PATH, EEPROM_ADDRESS) {
         Ok(device) => device,
         Err(error) => {
             eprintln!("Failed to open device: {error}");
             abort()
         },
-    };
+    }
+}
 
+
+fn main() {
     match Command::parse().subcommand {
         Sub::Read(read) => {
+            let mut device = open_device();
             let mut metadata_buffer = vec![0; std::mem::size_of::<Metadata>()];
 
             if let Err(error) = device.transfer(&mut [
@@ -131,6 +134,7 @@ fn main() {
             }
         }
         Sub::Write(write) => {
+            let mut device = open_device();
             let mut content_buffer = Vec::from(CONTENT_OFFSET.to_be_bytes());
             let mut metadata_buffer = Vec::from(METADATA_OFFSET.to_be_bytes());
 
