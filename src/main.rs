@@ -1,11 +1,10 @@
 use std::{fs::File, io::Read, path::PathBuf};
-
+use std::process::abort;
 use clap::{Args, Parser, Subcommand};
 use i2cdev::{core::{I2CMessage, I2CTransfer}, linux::LinuxI2CDevice};
 use serde::{Deserialize, Serialize};
-use std::process::abort;
 
-/// Total size of the EEPROM.
+/// Total size of the EEPROM in bytes.
 const EEPROM_SIZE: u16 = 8192;
 /// Offset to the address of the first byte in EEPROM where the metadata resides.
 const METADATA_OFFSET: u16 = 0;
@@ -22,7 +21,7 @@ static _METDATA_SIZE_ASSERTION: () = assert!(std::mem::size_of::<Metadata>() <= 
 
 /// Metadata stored in the memory
 /// 
-/// Note: If you modify this structure, ensure to not change its final size for compatiblity reasons.
+/// Note: If you modify this structure, take care to ensure backwards compatiblity.
 #[repr(C)]
 #[derive(Serialize, Deserialize)]
 struct Metadata {
