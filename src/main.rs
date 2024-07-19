@@ -1,6 +1,8 @@
+use std::time::Duration;
 use std::{fs::File, io::Read, path::PathBuf};
 use std::process::abort;
 use clap::{Args, Parser, Subcommand};
+use i2cdev::core::I2CDevice;
 use i2cdev::{core::{I2CMessage, I2CTransfer}, linux::LinuxI2CDevice};
 use serde::{Deserialize, Serialize};
 
@@ -93,6 +95,8 @@ fn main() {
                 eprintln!("Failed to read file metadata from EEPROM: {error}.");
                 abort()
             }
+            
+            std::thread::sleep(Duration::from_millis(10));
 
             let Ok(metadata) = bincode::deserialize::<Metadata>(metadata_buffer.as_slice()) else {
                 eprintln!("Invalid file metadata in EEPROM.");
@@ -135,7 +139,7 @@ fn main() {
         }
         Sub::Write(write) => {
             let mut device = open_device();
-            let mut content_buffer = Vec::from(CONTENT_OFFSET.to_be_bytes());
+            let mut content_buffer = Vec::default();
             let mut metadata_buffer = Vec::from(METADATA_OFFSET.to_be_bytes());
 
             let file_size = match File::open(write.source.as_path()).and_then(|mut f| f.read_to_end(&mut content_buffer)) {
@@ -153,7 +157,7 @@ fn main() {
 
             let metadata = Metadata {
                 unused: Default::default(),
-                content_crc: CRC.checksum(&content_buffer[2..]),
+                content_crc: CRC.checksum(content_buffer.as_slice()),
                 content_size: file_size as u16,
             };
 
@@ -166,12 +170,30 @@ fn main() {
                 abort()
             }
 
-            if let Err(error) = device.transfer(&mut [
-                I2CMessage::write(content_buffer.as_slice()),
-                I2CMessage::write(metadata_buffer.as_slice()),
-            ]) {
-                eprintln!("Failed to write file into EEPROM: {error}.");
+            // Write file metadata.
+            if let Err(error) = device.write(metadata_buffer.as_slice()) {
+                eprintln!("Failed to write file metadata into EEPROM: {error}.");
                 abort()
+            }
+
+            std::thread::sleep(Duration::from_millis(10));
+
+            // Write file content.
+            let mut buffer = vec![0_u8; 34];
+
+            for (index, chunk) in content_buffer.chunks(32).enumerate() {
+                let offset = CONTENT_OFFSET + 32 * (index as u16);
+                let size = 2 + chunk.len();
+
+                buffer[0..2].copy_from_slice(&offset.to_be_bytes());
+                buffer[2..size].copy_from_slice(chunk);
+
+                if let Err(error) = device.write(&buffer[0..size]) {
+                    eprintln!("Failed to write file into EEPROM: {error}.");
+                    abort()
+                }
+
+                std::thread::sleep(Duration::from_millis(10));
             }
         }
     }
