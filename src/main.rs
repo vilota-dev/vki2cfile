@@ -188,7 +188,10 @@ fn main() {
                 buffer[0..2].copy_from_slice(&offset.to_be_bytes());
                 buffer[2..size].copy_from_slice(chunk);
 
-                if let Err(error) = device.write(&buffer[0..size]) {
+                // Always copy 32 bytes even if the actual payload size is smaller.
+                // This helps circumvent some bugs with the device itself. These additional bytes don't matter
+                // since we are never going to read them.
+                if let Err(error) = device.write(&buffer) {
                     eprintln!("Failed to write file into EEPROM: {error}.");
                     abort()
                 }
