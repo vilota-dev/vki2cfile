@@ -15,3 +15,10 @@ Simply execute the produced binary `sudo ./vki2cfile <COMMAND> <FILE>` where *CO
 For more information on the arguments and additional options, simply run `sudo ./vki2cfile --help`. 
 
 Note that root permission is needed for this tool.
+
+# Note
+Run without root permission:
+- `sudo apt install i2c-tools`
+- `pi ALL=(ALL) NOPASSWD: /homr/pi/vki2cfle/target/release/vki2cfile`
+-  `sudo usermod -aG i2c $USER`
+- Reboot
