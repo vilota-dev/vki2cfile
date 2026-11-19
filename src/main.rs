@@ -150,6 +150,11 @@ fn main() {
                 }
             };
 
+            if file_size == 0 {
+                eprintln!("Refusing to write an empty file.");
+                std::process::exit(1);
+            }
+
             if file_size > MAX_CONTENT_SIZE as usize {
                 eprintln!("File '{:?}' is too large. Max allowable size is {MAX_CONTENT_SIZE} bytes.", write.source);
                 abort()
@@ -198,6 +203,43 @@ fn main() {
 
                 std::thread::sleep(Duration::from_millis(10));
             }
+
+            let mut metadata_readback = vec![0; std::mem::size_of::<Metadata>()];
+            let mut content_readback = vec![0; content_buffer.len()];
+            let verified = device.transfer(&mut [
+                I2CMessage::write(&METADATA_OFFSET.to_be_bytes()),
+                I2CMessage::read(&mut metadata_readback),
+            ]).and_then(|_| device.transfer(&mut [
+                I2CMessage::write(&CONTENT_OFFSET.to_be_bytes()),
+                I2CMessage::read(&mut content_readback),
+            ]));
+            if verified.is_err() || metadata_readback != metadata_buffer[2..]
+                || content_readback != content_buffer {
+                eprintln!("EEPROM write verification failed.");
+                std::process::exit(1);
+            }
         }
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn metadata_keeps_the_existing_content_layout() {
+        let content = b"{\"calibration_data\":{\"product_id\":\"70001\",\"last_modified\":0}}";
+        let metadata = Metadata {
+            unused: [0; 28],
+            content_crc: CRC.checksum(content),
+            content_size: content.len() as u16,
+        };
+        let encoded = bincode::serialize(&metadata).unwrap();
+        assert_eq!(encoded.len(), CONTENT_OFFSET as usize);
+        assert_eq!(&encoded[..28], &[0; 28]);
+        assert_eq!(&encoded[28..30], &metadata.content_crc.to_le_bytes());
+        assert_eq!(&encoded[30..32], &metadata.content_size.to_le_bytes());
+        let decoded: Metadata = bincode::deserialize(&encoded).unwrap();
+        assert_eq!(decoded.content_crc, CRC.checksum(content));
+        assert_eq!(MAX_CONTENT_SIZE, 8160);
     }
 }

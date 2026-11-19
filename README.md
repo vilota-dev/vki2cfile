@@ -22,3 +22,17 @@ Run without root permission:
 - `pi ALL=(ALL) NOPASSWD: /homr/pi/vki2cfle/target/release/vki2cfile`
 -  `sudo usermod -aG i2c $USER`
 - Reboot
+# Pinhole factory use
+
+The storage format is unchanged: 28 reserved bytes followed by content CRC and
+length, then up to 8160 bytes of content at offset 32. Pinhole identity is stored
+in the content JSON, not in reserved bytes. The application layer is
+`vk_flash_calibration pinhole clear/dump/flash` in `vk-system`.
+
+Writes reject empty/oversize files and verify metadata and content by reading
+back from EEPROM. A failed verification returns a nonzero status. This is not
+an atomic-write or recovery mechanism; explicitly reinitialize unreadable devices.
+
+Install the executable on the capture machine's `PATH`, for example with
+`cargo install --path . --locked`. Run `cargo test --offline` for the storage-layout
+regression test. Actual I2C writes require hardware validation.
